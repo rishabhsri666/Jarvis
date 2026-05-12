@@ -7,6 +7,8 @@ from datetime import datetime
 import requests
 import subprocess
 import re
+import numpy as np
+
 
 # -----------------------------------
 # TEXT TO SPEECH
@@ -121,16 +123,40 @@ while True:
 
     print("Listening...")
 
-    recording = sd.rec(
-        int(duration * sample_rate),
+    recording = []
+
+    silence_threshold = 500
+    silence_duration = 1.5
+
+    silent_chunks = 0
+
+    with sd.InputStream(
         samplerate=sample_rate,
         channels=1,
         dtype='int16'
-    )
+    ) as stream:
 
-    sd.wait()
+        while True:
 
-    write("voice.wav", sample_rate, recording)
+            audio_chunk, overflowed = stream.read(1024)
+
+            recording.append(audio_chunk)
+
+            volume = np.abs(audio_chunk).mean()
+
+            # detect silence
+            if volume < silence_threshold:
+                silent_chunks += 1
+            else:
+                silent_chunks = 0
+
+            # stop after silence
+            if silent_chunks > (silence_duration * sample_rate / 1024):
+                break
+
+    audio = np.concatenate(recording)
+
+    write("voice.wav", sample_rate, audio)
 
     print("Processing...")
 
