@@ -3,6 +3,7 @@ anyio==4.13.0
 av==17.0.1
 certifi==2026.4.22
 cffi==2.0.0
+charset-normalizer==3.4.7
 click==8.3.3
 colorama==0.4.6
 comtypes==1.4.16
@@ -29,6 +30,7 @@ pypiwin32==223
 pyttsx3==2.99
 pywin32==311
 PyYAML==6.0.3
+requests==2.34.0
 rich==15.0.0
 scipy==1.17.1
 shellingham==1.5.4
@@ -37,3 +39,4 @@ tokenizers==0.23.1
 tqdm==4.67.3
 typer==0.25.1
 typing_extensions==4.15.0
+urllib3==2.7.0

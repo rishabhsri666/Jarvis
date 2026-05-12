@@ -1,24 +1,52 @@
-import os
 import sounddevice as sd
 from scipy.io.wavfile import write
 from faster_whisper import WhisperModel
 import pyttsx3
 import webbrowser
 from datetime import datetime
+import requests
+import os
 
-# -----------------------------
+# -----------------------------------
 # TEXT TO SPEECH
-# -----------------------------
-engine = pyttsx3.init()
+# -----------------------------------
+
 
 def speak(text):
-    print("Jarvis:", text)
+
+    print("\nJarvis:", text)
+
+    engine = pyttsx3.init()
+
     engine.say(text)
+
     engine.runAndWait()
 
-# -----------------------------
-# WHISPER MODEL
-# -----------------------------
+    engine.stop()
+
+# -----------------------------------
+# AI FUNCTION
+# -----------------------------------
+
+def ask_ai(prompt):
+
+    response = requests.post(
+        "http://localhost:11434/api/generate",
+        json={
+            "model": "phi3",
+            "prompt": prompt,
+            "stream": False
+        }
+    )
+
+    data = response.json()
+
+    return data["response"]
+
+# -----------------------------------
+# LOAD WHISPER
+# -----------------------------------
+
 print("Loading Whisper model...")
 
 model = WhisperModel("base")
@@ -28,9 +56,10 @@ print("Jarvis is ready.")
 sample_rate = 44100
 duration = 5
 
-# -----------------------------
+# -----------------------------------
 # MAIN LOOP
-# -----------------------------
+# -----------------------------------
+
 while True:
 
     input("\nPress ENTER to talk...")
@@ -57,13 +86,13 @@ while True:
     for segment in segments:
         command += segment.text
 
-    command = command.lower()
+    command = command.lower().strip()
 
     print("\nYou said:", command)
 
-    # -----------------------------
-    # COMMANDS
-    # -----------------------------
+    # -----------------------------------
+    # BASIC COMMANDS
+    # -----------------------------------
 
     if "hello" in command:
         speak("Hello Rishabh")
@@ -88,17 +117,20 @@ while True:
         speak("Opening Calculator")
         os.system("start calc")
 
-    elif "spotify" in command:
-        speak("Opening Spotify")
-        os.system("start spotify")
-
-    elif "chrome" in command:
-        speak("Opening Chrome")
-        os.system("start chrome")
-
     elif "exit" in command:
         speak("Goodbye")
         break
 
+    # -----------------------------------
+    # AI MODE
+    # -----------------------------------
+
     else:
-        speak("I did not understand")
+
+        speak("Thinking")
+
+        reply = ask_ai(command)
+
+        # print("\nAI:", reply)
+
+        speak(reply)
