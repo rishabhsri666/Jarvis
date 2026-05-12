@@ -5,12 +5,12 @@ import pyttsx3
 import webbrowser
 from datetime import datetime
 import requests
-import os
+import subprocess
+import re
 
 # -----------------------------------
 # TEXT TO SPEECH
 # -----------------------------------
-
 
 def speak(text):
 
@@ -24,24 +24,60 @@ def speak(text):
 
     engine.stop()
 
+
 # -----------------------------------
 # AI FUNCTION
 # -----------------------------------
 
+conversation_history = []
+
+SYSTEM_PROMPT = """
+You are Jarvis, a helpful AI assistant.
+
+You remember previous conversation messages.
+
+If the user tells you their name, remember it.
+
+Reply naturally and briefly.
+"""
+
 def ask_ai(prompt):
+
+    conversation_history.append(
+        f"User: {prompt}"
+    )
+
+    full_prompt = SYSTEM_PROMPT + "\n\n"
+
+    for message in conversation_history:
+        full_prompt += message + "\n"
+
+    full_prompt += "Assistant:"
 
     response = requests.post(
         "http://localhost:11434/api/generate",
         json={
             "model": "phi3",
-            "prompt": prompt,
+            "prompt": full_prompt,
             "stream": False
         }
     )
 
     data = response.json()
 
-    return data["response"]
+    reply = data["response"].strip()
+
+    # cleanup
+    reply = reply.replace("Assistant:", "")
+    reply = reply.replace("Jarvis:", "")
+    reply = reply.strip()
+
+    conversation_history.append(
+        f"Assistant: {reply}"
+    )
+
+    return reply
+
 
 # -----------------------------------
 # LOAD WHISPER
@@ -49,12 +85,31 @@ def ask_ai(prompt):
 
 print("Loading Whisper model...")
 
-model = WhisperModel("base")
+model = WhisperModel("small")
 
 print("Jarvis is ready.")
 
-sample_rate = 44100
+# -----------------------------------
+# SETTINGS
+# -----------------------------------
+
+sample_rate = 16000
 duration = 5
+
+# -----------------------------------
+# APP MAPPINGS
+# -----------------------------------
+
+apps = {
+    "calculator": "calc.exe",
+    "powershell": "powershell.exe",
+    "chrome": "chrome.exe",
+    "notepad": "notepad.exe",
+    "paint": "mspaint.exe",
+    "spotify": "spotify.exe",
+    "vscode": "code"
+}
+
 
 # -----------------------------------
 # MAIN LOOP
@@ -79,7 +134,10 @@ while True:
 
     print("Processing...")
 
-    segments, info = model.transcribe("voice.wav")
+    segments, info = model.transcribe(
+        "voice.wav",
+        language="en"
+    )
 
     command = ""
 
@@ -95,30 +153,62 @@ while True:
     # -----------------------------------
 
     if "hello" in command:
+
         speak("Hello Rishabh")
 
     elif "time" in command:
+
         current_time = datetime.now().strftime("%I:%M %p")
+
         speak(f"The time is {current_time}")
 
     elif "youtube" in command:
+
         speak("Opening YouTube")
+
         webbrowser.open("https://youtube.com")
 
     elif "google" in command:
+
         speak("Opening Google")
+
         webbrowser.open("https://google.com")
 
-    elif "notepad" in command:
-        speak("Opening Notepad")
-        os.system("start notepad")
+    # -----------------------------------
+    # OPEN APPLICATIONS
+    # -----------------------------------
 
-    elif "calculator" in command:
-        speak("Opening Calculator")
-        os.system("start calc")
+    elif command.startswith("open"):
+
+        app = command.replace("open", "").strip()
+
+        # remove punctuation
+        app = re.sub(r'[^\w\s]', '', app)
+
+        if app in apps:
+
+            speak(f"Opening {app}")
+
+            try:
+
+                subprocess.Popen(apps[app])
+
+            except:
+
+                speak("Could not open application")
+
+        else:
+
+            speak("Application not found")
+
+    # -----------------------------------
+    # EXIT
+    # -----------------------------------
 
     elif "exit" in command:
+
         speak("Goodbye")
+
         break
 
     # -----------------------------------
@@ -129,8 +219,14 @@ while True:
 
         speak("Thinking")
 
-        reply = ask_ai(command)
+        try:
 
-        # print("\nAI:", reply)
+            reply = ask_ai(command)
 
-        speak(reply)
+            # print("\nAI:", reply)
+
+            speak(reply)
+
+        except:
+
+            speak("AI connection failed")
