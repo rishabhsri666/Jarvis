@@ -1,11 +1,15 @@
+from commands.apps import *
+from commands.system import *
+from commands.router import detect_intent
+from commands.web import *
+
+
 import sounddevice as sd
 from scipy.io.wavfile import write
 from faster_whisper import WhisperModel
 import pyttsx3
-import webbrowser
 from datetime import datetime
 import requests
-import subprocess
 import re
 import numpy as np
 
@@ -28,7 +32,7 @@ def speak(text):
 
 
 # -----------------------------------
-# AI FUNCTION
+# MEMORY
 # -----------------------------------
 
 conversation_history = []
@@ -43,6 +47,11 @@ If the user tells you their name, remember it.
 Reply naturally and briefly.
 """
 
+
+# -----------------------------------
+# AI FUNCTION
+# -----------------------------------
+
 def ask_ai(prompt):
 
     conversation_history.append(
@@ -52,6 +61,7 @@ def ask_ai(prompt):
     full_prompt = SYSTEM_PROMPT + "\n\n"
 
     for message in conversation_history:
+
         full_prompt += message + "\n"
 
     full_prompt += "Assistant:"
@@ -91,26 +101,12 @@ model = WhisperModel("small")
 
 print("Jarvis is ready.")
 
+
 # -----------------------------------
 # SETTINGS
 # -----------------------------------
 
 sample_rate = 16000
-duration = 5
-
-# -----------------------------------
-# APP MAPPINGS
-# -----------------------------------
-
-apps = {
-    "calculator": "calc.exe",
-    "powershell": "powershell.exe",
-    "chrome": "chrome.exe",
-    "notepad": "notepad.exe",
-    "paint": "mspaint.exe",
-    "spotify": "spotify.exe",
-    "vscode": "code"
-}
 
 
 # -----------------------------------
@@ -125,10 +121,12 @@ while True:
 
     recording = []
 
-    silence_threshold = 500
+    silence_threshold = 1000
     silence_duration = 1.5
+    max_duration = 10
 
     silent_chunks = 0
+    total_chunks = 0
 
     with sd.InputStream(
         samplerate=sample_rate,
@@ -144,14 +142,25 @@ while True:
 
             volume = np.abs(audio_chunk).mean()
 
-            # detect silence
+            total_chunks += 1
+
+            # silence detection
             if volume < silence_threshold:
+
                 silent_chunks += 1
+
             else:
+
                 silent_chunks = 0
 
             # stop after silence
             if silent_chunks > (silence_duration * sample_rate / 1024):
+
+                break
+
+            # force stop
+            if total_chunks > (max_duration * sample_rate / 1024):
+
                 break
 
     audio = np.concatenate(recording)
@@ -168,6 +177,7 @@ while True:
     command = ""
 
     for segment in segments:
+
         command += segment.text
 
     command = command.lower().strip()
@@ -175,63 +185,113 @@ while True:
     print("\nYou said:", command)
 
     # -----------------------------------
-    # BASIC COMMANDS
+    # DETECT INTENT
     # -----------------------------------
 
-    if "hello" in command:
+    intent = detect_intent(command)
 
-        speak("Hello Rishabh")
+    print("Intent:", intent)
 
-    elif "time" in command:
+    # -----------------------------------
+    # TIME
+    # -----------------------------------
+
+    if intent == "time":
 
         current_time = datetime.now().strftime("%I:%M %p")
 
         speak(f"The time is {current_time}")
 
-    elif "youtube" in command:
-
-        speak("Opening YouTube")
-
-        webbrowser.open("https://youtube.com")
-
-    elif "google" in command:
-
-        speak("Opening Google")
-
-        webbrowser.open("https://google.com")
-
     # -----------------------------------
-    # OPEN APPLICATIONS
+    # OPEN APPS / WEBSITES
     # -----------------------------------
 
-    elif command.startswith("open"):
+    elif intent == "open":
 
-        app = command.replace("open", "").strip()
+        words = command.split()
 
-        # remove punctuation
-        app = re.sub(r'[^\w\s]', '', app)
+        target = " ".join(words[1:])
 
-        if app in apps:
+        target = re.sub(r'[^\w\s]', '', target)
 
-            speak(f"Opening {app}")
+        success = (
+            open_app(target)
+            or open_website(target)
+            or open_folder(target)
+        )
 
-            try:
+        if success:
 
-                subprocess.Popen(apps[app])
-
-            except:
-
-                speak("Could not open application")
+            speak(f"Opening {target}")
 
         else:
 
-            speak("Application not found")
+            speak("Application, website, or folder not found")
+
+    # -----------------------------------
+    # SYSTEM COMMANDS
+    # -----------------------------------
+
+    elif intent == "battery":
+
+        battery_status = get_battery()
+
+        speak(battery_status)
+
+    elif intent == "shutdown":
+
+        speak("Shutting down computer")
+
+        shutdown_pc()
+
+    elif intent == "restart":
+
+        speak("Restarting computer")
+
+        restart_pc()
+
+    elif intent == "lock":
+
+        speak("Locking computer")
+
+        lock_pc()
+        
+        # -----------------------------------
+    # GOOGLE SEARCH
+    # -----------------------------------
+
+    elif intent == "google_search":
+
+        query = command.replace(
+            "search google for",
+            ""
+        ).strip()
+
+        speak(f"Searching Google for {query}")
+
+        google_search(query)
+
+
+    # -----------------------------------
+    # YOUTUBE SEARCH
+    # -----------------------------------
+
+    elif intent == "youtube_search":
+
+        query = command.replace(
+            "search youtube for",
+            ""
+        ).strip()
+
+        speak(f"Searching YouTube for {query}")
+
+        youtube_search(query)
 
     # -----------------------------------
     # EXIT
     # -----------------------------------
 
-    elif "exit" in command:
+    elif intent == "exit":
 
         speak("Goodbye")
 
@@ -248,8 +308,6 @@ while True:
         try:
 
             reply = ask_ai(command)
-
-            # print("\nAI:", reply)
 
             speak(reply)
 
